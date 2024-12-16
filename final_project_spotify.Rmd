@@ -1,0 +1,154 @@
+---
+title: "Spotify_songs_analysis"
+author: "Horgonyi Anna"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+This project analyzes the Spotify Songs dataset from the TidyTuesday project. The main objectives are to perform exploratory data analysis, build and compare statistical models, and provide human-readable and well-documented results.
+
+## Data Import and Preparation
+
+```{r load-packages}
+# Set the CRAN mirror
+chooseCRANmirror(graphics = FALSE, ind = 1) # This chooses the first CRAN mirror
+
+# Install necessary packages
+install.packages("janitor")
+install.packages("caret")
+install.packages("broom")
+install.packages("knitr")
+
+# Load the libraries
+library(tidyverse)
+library(janitor)
+library(ggplot2)
+library(caret)
+library(broom)
+library(knitr)
+
+```
+
+```{r load-data}
+# import data from GitHub
+url <- "https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2020/2020-01-21/spotify_songs.csv"
+spotify_songs <- read_csv(url) %>% 
+  clean_names()
+
+# quick overview of the dataset
+head(spotify_songs)
+summary(spotify_songs)
+```
+
+## Exploratory Data Analysis (EDA)
+
+### Distribution of Key Variables
+
+```{r eda-plots}
+
+# relationship between acousticness and energy
+spotify_songs %>% 
+  ggplot(aes(x = acousticness, y = energy)) + 
+  geom_point(alpha = 0.3) + 
+  geom_smooth(method = "lm", color = "red") + 
+  labs(title = "űacousticness vs. Energy", x = "Acousticness", y = "Energy")
+
+# relationship between speechiness and liveness
+spotify_songs %>% 
+  ggplot(aes(x = speechiness, y = danceability)) + 
+  geom_point(alpha = 0.3) + 
+  geom_smooth(method = "lm", color = "red") + 
+  labs(title = "Speechiness vs. Liveness", x = "Speechiness", y = "Liveness")
+```
+
+## Statistical Models
+
+### Model 1: predicting danceability using energy and acousticness
+#### Hypothesis: Both energy and acousticness have a significant positive relationship with danceability. 
+
+```{r model1}
+# create model 1
+model1 <- lm(danceability ~ energy + acousticness, data = spotify_songs)
+
+# display summary of model 1
+summary(model1)
+
+# check residuals of model 1
+par(mfrow = c(2, 2))
+plot(model1)
+
+# perform normality check using shapiro-wilk test on residuals
+shapiro_test <- shapiro.test(sample(resid(model1), 5000))
+shapiro_test
+
+
+```
+
+### Model 2: predicting liveness using valence, tempo, and speechiness
+#### Hypothesis: Valence, tempo, and speechiness significantly predict the liveness of songs.
+
+```{r model2}
+# create model 2
+model2 <- lm(liveness ~ valence + tempo + speechiness, data = spotify_songs)
+
+# display summary of model 2
+summary(model2)
+
+# check residuals of model 2
+par(mfrow = c(2, 2))
+plot(model2)
+
+# perform normality check using shapiro-wilk test on residuals
+shapiro_test <- shapiro.test(sample(resid(model2), 5000))
+shapiro_test
+
+# plots show a "funnel-shape" so checking for homoscedasticity with the breusch-pagan test
+
+library(lmtest)
+bptest(model1)
+
+# homoskedasticity violated, do corrections
+
+# load the necessary package
+install.packages("sandwich")
+library(sandwich)
+
+# calculate robust standard errors
+robust_se <- sqrt(diag(vcovHC(model1, type = "HC1")))
+
+# display the robust standard errors
+robust_se
+
+```
+
+## Model Evaluation
+
+```{r model-evaluation}
+# AIC and BIC for Model 1
+aic_model1 <- AIC(model1)
+bic_model1 <- BIC(model1)
+
+# AIC and BIC for Model 2
+aic_model2 <- AIC(model2)
+bic_model2 <- BIC(model2)
+
+# Output the results
+aic_model1
+bic_model1
+aic_model2
+bic_model2
+```
+### Conclusions
+##### Model 1 has lower AIC and BIC values compared to model 2, so model 2 is a better fit for the data than model 1. The hypothesis that both energy and acousticness have a positive relationship with danceability is not supported by the results. Both predictors show a negative relationship with danceability. The statistical significance of these predictors (with very small p-values) indicates that they are indeed related to danceability, but their effect is negative, which contradicts the initial expectation. The R-squared value is low, suggesting that the model does not explain much of the variability in danceability. This could indicate that other factors, not included in this model, may be more important in predicting danceability.
+
+
+
+
